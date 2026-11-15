@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>足球瞬間記憶訓練 Pro (YouTube + 旋轉版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 戰術板專用樣式 */
+        .pitch {
+            background-color: #2e7d32;
+            position: relative;
+            width: 100%;
+            border: 2px solid white;
+            overflow: hidden;
+            touch-action: none;
+            transition: aspect-ratio 0.3s ease; /* 旋轉時嘅動畫過渡 */
+        }
+        
+        /* 根據 data-orientation 決定長寬比 */
+        .pitch[data-orientation="horizontal"] { aspect-ratio: 3 / 2; }
+        .pitch[data-orientation="vertical"] { aspect-ratio: 2 / 3; }
+
+        /* 控制橫向與直向線條嘅顯示 */
+        .pitch[data-orientation="horizontal"] .layout-v { display: none; }
+        .pitch[data-orientation="horizontal"] .layout-h { display: block; }
+        .pitch[data-orientation="vertical"] .layout-h { display: none; }
+        .pitch[data-orientation="vertical"] .layout-v { display: block; }
+
+        /* 球場線條共用樣式 */
+        .line-center { position: absolute; background: white; }
+        .circle-center { position: absolute; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); }
+        .penalty-box { position: absolute; border: 2px solid white; }
+        
+        /* 標記與畫圖 */
+        .marker {
+            position: absolute;
+            width: 20px; height: 20px; border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            border: 2px solid white; transition: transform 0.1s, left 0.3s ease, top 0.3s ease; z-index: 20;
+        }
+        .marker:hover { transform: translate(-50%, -50%) scale(1.2); }
+        
+        #drawingLayer { z-index: 10; pointer-events: none; }
+        #drawingLayer line { pointer-events: auto; cursor: pointer; transition: stroke-width 0.1s; }
+        #drawingLayer line:hover { stroke-width: 6; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans p-4">
+
+    <div class="bg-gray-900 rounded-xl shadow-2xl p-6 max-w-5xl mx-auto border border-gray-800" id="mainContainer">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-white">⚽ 足球瞬間記憶訓練 Pro</h1>
+
+        <!-- 設定區 -->
+        <div id="setupSection" class="flex flex-col gap-4 mb-6 p-4 bg-gray-800 rounded-lg">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- YouTube 載入區 -->
+                <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
+                    <label class="block text-sm font-medium text-red-400 mb-2 font-bold">▶️ 貼上 YouTube 連結</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="youtubeInput" placeholder="https://youtu.be/..." class="flex-1 p-2 text-sm bg-gray-900 text-white border border-gray-600 rounded">
+                        <button id="loadYoutubeBtn" class="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded hover:bg-red-700">載入</button>
+                    </div>
+                </div>
+
+                <!-- 本地影片上傳區 -->
+                <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
+                    <label class="block text-sm font-medium text-blue-400 mb-2 font-bold">📁 或 上傳本地影片</label>
+                    <input type="file" id="videoUpload" accept="video/*" class="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 mt-2">
+                <div class="w-full md:w-64">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">記憶間隔</label>
+                    <select id="intervalSelect" class="w-full p-2 border border-gray-700 bg-gray-900 text-white rounded-md">
+                        <option value="random">隨機 (5 - 15秒)</option>
+                        <option value="5">每 5 秒</option>
+                        <option value="10" selected>每 10 秒</option>
+                        <option value="15">每 15 秒</option>
+                        <option value="30">每 30 秒</option>
+                    </select>
+                </div>
+                <div class="flex items-end flex-1">
+                    <button id="startBtn" class="w-full px-6 py-2 bg-green-600 text-white font-bold rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        開始訓練
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 訓練區域 -->
+        <div id="trainingSection" class="hidden flex-col md:flex-row gap-6">
+            
+            <!-- 影片區塊 -->
+            <div id="videoContainer" class="flex-1 h-fit flex flex-col items-center">
+                <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline></video>
+                <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden pointer-events-none"></div>
+                
+                <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中...</p>
+                
+                <div id="timeControls" class="flex gap-3 mt-3 w-full justify-center">
+                    <button onclick="skipTime(-5)" class="px-4 py-2 bg-gray-700 text-white font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
+                    <button onclick="skipTime(10)" class="px-4 py-2 bg-gray-700 text-white font-bold rounded hover:bg-gray-600 shadow">快進 10 秒 ⏩</button>
+                </div>
+            </div>
+
+            <!-- 戰術板區塊 -->
+            <div id="tacticalContainer" class="hidden flex-1 h-fit flex-col">
+                <!-- 工具列 -->
+                <div class="flex flex-wrap gap-2 mb-3 p-2 bg-gray-800 rounded-lg justify-center items-center">
+                    <button class="tool-btn active px-3 py-1 rounded-md text-sm font-bold bg-red-500 text-white border-2 border-white" data-tool="red">主隊</button>
+                    <button class="tool-btn px-3 py-1 rounded-md text-sm font-bold bg-blue-500 text-white border-2 border-transparent" data-tool="blue">客隊</button>
+                    <button class="tool-btn px-3 py-1 rounded-md text-sm font-bold bg-yellow-400 text-black border-2 border-transparent" data-tool="ball">足球</button>
+                    <button class="tool-btn px-3 py-1 rounded-md text-sm font-bold bg-gray-600 text-white border-2 border-transparent flex items-center gap-1" data-tool="arrow">↗️ 箭嘴</button>
+                    
+                    <div class="w-px h-6 bg-gray-600 mx-1"></div>
+                    <button id="undoBtn" class="px-3 py-1 rounded-md text-sm font-bold bg-gray-700 text-white hover:bg-gray-600 flex items-center gap-1">↺ 上一步</button>
+                    <button id="rotateBtn" class="px-3 py-1 rounded-md text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-1 shadow">🔄 旋轉</button>
+                </div>
+
+                <!-- 球場 -->
+                <div id="pitch" class="pitch rounded-lg shadow-lg" data-orientation="horizontal">
+                    <!-- 橫向模式線條 -->
+                    <div class="line-center layout-h" style="width: 2px; height: 100%; left: 50%; top: 0;"></div>
+                    <div class="circle-center layout-h" style="width: 20%; aspect-ratio: 1; left: 50%; top: 50%;"></div>
+                    <div class="penalty-box layout-h" style="width: 15%; height: 50%; left: 0; top: 25%; border-left: none;"></div>
+                    <div class="penalty-box layout-h" style="width: 15%; height: 50%; right: 0; top: 25%; border-right: none;"></div>
+                    
+                    <!-- 直向模式線條 -->
+                    <div class="line-center layout-v" style="width: 100%; height: 2px; top: 50%; left: 0;"></div>
+                    <div class="circle-center layout-v" style="width: 30%; aspect-ratio: 1; left: 50%; top: 50%;"></div>
+                    <div class="penalty-box layout-v" style="width: 60%; height: 15%; top: 0; left: 20%; border-top: none;"></div>
+                    <div class="penalty-box layout-v" style="width: 60%; height: 15%; bottom: 0; left: 20%; border-bottom: none;"></div>
+                    
+                    <svg id="drawingLayer" class="absolute inset-0 w-full h-full">
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="white" /></marker>
+                        </defs>
+                    </svg>
+                </div>
+
+                <p class="text-xs text-gray-400 mt-2 text-center">點擊放球員，拖曳畫箭嘴。可隨時旋轉戰術板視角。</p>
+
+                <!-- 動作按鈕 -->
+                <div class="mt-4 flex flex-col gap-3">
+                    <button id="compareBtn" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow">提交並比較</button>
+                    <div id="scoreZone" class="hidden flex-col gap-2">
+                        <p class="text-sm font-bold text-center text-gray-300">為今次記憶評分：</p>
+                        <div class="flex gap-2">
+                            <button class="score-btn flex-1 py-2 bg-green-600 rounded hover:bg-green-700 font-bold" data-score="accurate">準確</button>
+                            <button class="score-btn flex-1 py-2 bg-yellow-600 rounded hover:bg-yellow-700 font-bold" data-score="average">一般</button>
+                            <button class="score-btn flex-1 py-2 bg-red-600 rounded hover:bg-red-700 font-bold" data-score="bad">差好遠</button>
+                        </div>
+                    </div>
+                    <div id="nextActionsZone" class="hidden flex gap-2">
+                        <button id="continueBtn" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">繼續訓練</button>
+                        <button id="endBtn" class="flex-1 py-3 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-600">結束並看報告</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 訓練報告區 -->
+        <div id="resultsSection" class="hidden bg-gray-800 p-6 rounded-lg text-center">
+            <h2 class="text-2xl font-bold text-white mb-6">📊 訓練報告</h2>
+            <div class="flex justify-around mb-6 text-xl">
+                <div><span class="block text-gray-400 text-sm mb-1">總次數</span><span id="statTotal" class="font-bold text-2xl">0</span></div>
+                <div><span class="block text-green-400 text-sm mb-1">準確</span><span id="statAccurate" class="font-bold text-2xl">0</span></div>
+                <div><span class="block text-yellow-400 text-sm mb-1">一般</span><span id="statAverage" class="font-bold text-2xl">0</span></div>
+                <div><span class="block text-red-400 text-sm mb-1">差好遠</span><span id="statBad" class="font-bold text-2xl">0</span></div>
+            </div>
+            <button id="restartBtn" class="px-8 py-3 bg-blue-600 font-bold rounded-lg hover:bg-blue-700">重新開始新訓練</button>
+        </div>
+    </div>
+
+    <!-- 載入 YouTube API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        // === 影片播放系統 ===
+        let activePlayer = 'none';
+        let ytPlayer = null;
+        let ytReady = false;
+        
+        const matchVideo = document.getElementById('matchVideo');
+        const ytPlayerContainer = document.getElementById('youtubePlayer');
+        const startBtn = document.getElementById('startBtn');
+
+        function onYouTubeIframeAPIReady() { ytReady = true; }
+
+        function extractYouTubeID(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        document.getElementById('loadYoutubeBtn').addEventListener('click', () => {
+            const url = document.getElementById('youtubeInput').value;
+            const videoId = extractYouTubeID(url);
+            if (!videoId) return alert('無效的 YouTube 連結！請檢查清楚。');
+
+            activePlayer = 'youtube';
+            matchVideo.classList.add('hidden');
+            ytPlayerContainer.classList.remove('hidden');
+
+            if (ytPlayer) {
+                ytPlayer.loadVideoById(videoId);
+                ytPlayer.pauseVideo();
+            } else {
+                ytPlayer = new YT.Player('youtubePlayer', {
+                    videoId: videoId,
+                    playerVars: { 'playsinline': 1, 'controls': 1 },
+                    events: { 'onReady': () => { startBtn.disabled = false; } }
+                });
+            }
+            startBtn.disabled = false;
+            alert('YouTube 影片已成功連接！');
+        });
+
+        document.getElementById('videoUpload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                activePlayer = 'local';
+                ytPlayerContainer.classList.add('hidden');
+                matchVideo.classList.remove('hidden');
+                if (ytPlayer) ytPlayer.pauseVideo();
+                matchVideo.src = URL.createObjectURL(file);
+                startBtn.disabled = false;
+            }
+        });
+
+        function getVideoTime() {
+            if (activePlayer === 'local') return matchVideo.currentTime;
+            if (activePlayer === 'youtube' && ytPlayer && ytPlayer.getCurrentTime) return ytPlayer.getCurrentTime();
+            return 0;
+        }
+
+        function playActiveVideo() {
+            if (activePlayer === 'local') matchVideo.play();
+            if (activePlayer === 'youtube' && ytPlayer) ytPlayer.playVideo();
+        }
+
+        function pauseActiveVideo() {
+            if (activePlayer === 'local') matchVideo.pause();
+            if (activePlayer === 'youtube' && ytPlayer) ytPlayer.pauseVideo();
+        }
+
+        window.skipTime = function(seconds) {
+            if (activePlayer === 'local') matchVideo.currentTime += seconds;
+            else if (activePlayer === 'youtube' && ytPlayer) ytPlayer.seekTo(ytPlayer.getCurrentTime() + seconds, true);
+        };
+
+        // === 核心訓練與戰術板邏輯 ===
+        const intervalSelect = document.getElementById('intervalSelect');
+        const setupSection = document.getElementById('setupSection');
+        const trainingSection = document.getElementById('trainingSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const videoContainer = document.getElementById('videoContainer');
+        const tacticalContainer = document.getElementById('tacticalContainer');
+        const videoStatus = document.getElementById('videoStatus');
+        const timeControls = document.getElementById('timeControls');
+        
+        const pitch = document.getElementById('pitch');
+        const drawingLayer = document.getElementById('drawingLayer');
+        const toolBtns = document.querySelectorAll('.tool-btn');
+        const undoBtn = document.getElementById('undoBtn');
+        const rotateBtn = document.getElementById('rotateBtn');
+        const compareBtn = document.getElementById('compareBtn');
+        const scoreZone = document.getElementById('scoreZone');
+        const nextActionsZone = document.getElementById('nextActionsZone');
+        const continueBtn = document.getElementById('continueBtn');
+        
+        let currentTool = 'red';
+        let checkInterval;
+        let targetTime = 0;
+        let markerHistory = []; 
+        let scores = { accurate: 0, average: 0, bad: 0 };
+        let isDrawing = false;
+        let currentSvgLine = null;
+
+        // 初始化球場方向 (手機預設直，電腦預設橫)
+        let initialOrientation = window.innerWidth < 768 ? 'vertical' : 'horizontal';
+        pitch.setAttribute('data-orientation', initialOrientation);
+
+        // 旋轉球場邏輯 (真實 90 度轉換所有座標)
+        rotateBtn.addEventListener('click', () => {
+            const currentMode = pitch.getAttribute('data-orientation');
+            const newMode = currentMode === 'horizontal' ? 'vertical' : 'horizontal';
+            pitch.setAttribute('data-orientation', newMode);
+            
+            // 轉換圓點座標
+            document.querySelectorAll('.marker').forEach(marker => {
+                let left = parseFloat(marker.style.left);
+                let top = parseFloat(marker.style.top);
+                if (newMode === 'vertical') {
+                    marker.style.left = `${100 - top}%`; marker.style.top = `${left}%`;
+                } else {
+                    marker.style.left = `${top}%`; marker.style.top = `${100 - left}%`;
+                }
+            });
+
+            // 轉換箭嘴座標
+            document.querySelectorAll('#drawingLayer line').forEach(line => {
+                let x1 = parseFloat(line.getAttribute('x1')), y1 = parseFloat(line.getAttribute('y1'));
+                let x2 = parseFloat(line.getAttribute('x2')), y2 = parseFloat(line.getAttribute('y2'));
+                if (newMode === 'vertical') {
+                    line.setAttribute('x1', `${100 - y1}%`); line.setAttribute('y1', `${x1}%`);
+                    line.setAttribute('x2', `${100 - y2}%`); line.setAttribute('y2', `${x2}%`);
+                } else {
+                    line.setAttribute('x1', `${y1}%`); line.setAttribute('y1', `${100 - x1}%`);
+                    line.setAttribute('x2', `${y2}%`); line.setAttribute('y2', `${100 - x2}%`);
+                }
+            });
+        });
+
+        toolBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                toolBtns.forEach(b => b.classList.replace('border-white', 'border-transparent'));
+                e.currentTarget.classList.replace('border-transparent', 'border-white');
+                currentTool = e.currentTarget.dataset.tool;
+            });
+        });
+
+        // 畫板互動
+        pitch.addEventListener('pointerdown', (e) => {
+            if (e.target.classList.contains('marker') || e.target.tagName.toLowerCase() === 'line') {
+                e.target.remove();
+                markerHistory = markerHistory.filter(m => m !== e.target);
+                return;
+            }
+            const rect = pitch.getBoundingClientRect();
+            let xPercent = ((e.clientX - rect.left) / rect.width) * 100;
+            let yPercent = ((e.clientY - rect.top) / rect.height) * 100;
+
+            if (currentTool === 'arrow') {
+                isDrawing = true;
+                currentSvgLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                currentSvgLine.setAttribute('x1', `${xPercent}%`); currentSvgLine.setAttribute('y1', `${yPercent}%`);
+                currentSvgLine.setAttribute('x2', `${xPercent}%`); currentSvgLine.setAttribute('y2', `${yPercent}%`);
+                currentSvgLine.setAttribute('stroke', 'white'); currentSvgLine.setAttribute('stroke-width', '4');
+                currentSvgLine.setAttribute('marker-end', 'url(#arrowhead)');
+                drawingLayer.appendChild(currentSvgLine);
+                pitch.setPointerCapture(e.pointerId);
+            } else {
+                const marker = document.createElement('div');
+                marker.classList.add('marker');
+                marker.style.left = `${xPercent}%`; marker.style.top = `${yPercent}%`;
+                if (currentTool === 'red') marker.style.backgroundColor = '#ef4444';
+                if (currentTool === 'blue') marker.style.backgroundColor = '#3b82f6';
+                if (currentTool === 'ball') marker.style.backgroundColor = '#facc15';
+                pitch.appendChild(marker);
+                markerHistory.push(marker);
+            }
+        });
+
+        pitch.addEventListener('pointermove', (e) => {
+            if (!isDrawing || !currentSvgLine) return;
+            const rect = pitch.getBoundingClientRect();
+            let xPercent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+            let yPercent = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+            currentSvgLine.setAttribute('x2', `${xPercent}%`); currentSvgLine.setAttribute('y2', `${yPercent}%`);
+        });
+
+        pitch.addEventListener('pointerup', (e) => {
+            if (isDrawing && currentSvgLine) {
+                isDrawing = false;
+                pitch.releasePointerCapture(e.pointerId);
+                const dist = Math.hypot(
+                    parseFloat(currentSvgLine.getAttribute('x2')) - parseFloat(currentSvgLine.getAttribute('x1')), 
+                    parseFloat(currentSvgLine.getAttribute('y2')) - parseFloat(currentSvgLine.getAttribute('y1'))
+                );
+                if (dist < 2) currentSvgLine.remove();
+                else markerHistory.push(currentSvgLine);
+                currentSvgLine = null;
+            }
+        });
+
+        undoBtn.addEventListener('click', () => { if (markerHistory.length > 0) markerHistory.pop().remove(); });
+
+        // 流程控制
+        startBtn.addEventListener('click', () => {
+            scores = { accurate: 0, average: 0, bad: 0 }; 
+            startNextInterval();
+            setupSection.classList.add('hidden');
+            trainingSection.classList.remove('hidden');
+        });
+
+        function startNextInterval() {
+            videoContainer.classList.remove('hidden');
+            timeControls.classList.remove('hidden');
+            tacticalContainer.classList.add('hidden');
+            compareBtn.classList.remove('hidden');
+            scoreZone.classList.add('hidden');
+            nextActionsZone.classList.add('hidden');
+            
+            document.querySelectorAll('.marker').forEach(m => m.remove());
+            document.querySelectorAll('#drawingLayer line').forEach(m => m.remove());
+            markerHistory = [];
+
+            const val = intervalSelect.value;
+            const seconds = (val === 'random') ? Math.floor(Math.random() * (15 - 5 + 1)) + 5 : parseInt(val);
+            
+            targetTime = getVideoTime() + seconds;
+            playActiveVideo();
+            videoStatus.textContent = `▶️ 專注觀看比賽 (約 ${val === 'random' ? '?' : seconds} 秒後暫停)`;
+            
+            checkInterval = setInterval(() => {
+                if (getVideoTime() >= targetTime) pauseForTactical();
+            }, 100);
+        }
+
+        function pauseForTactical() {
+            clearInterval(checkInterval);
+            pauseActiveVideo();
+            videoContainer.classList.add('hidden');
+            tacticalContainer.classList.remove('hidden');
+        }
+
+        compareBtn.addEventListener('click', () => {
+            videoContainer.classList.remove('hidden');
+            timeControls.classList.add('hidden');
+            trainingSection.classList.add('md:items-start');
+            if (activePlayer === 'youtube') ytPlayerContainer.classList.remove('pointer-events-none');
+            
+            videoStatus.textContent = "👀 左邊係實際畫面，右邊係你嘅記憶！";
+            compareBtn.classList.add('hidden');
+            scoreZone.classList.remove('hidden');
+        });
+
+        document.querySelectorAll('.score-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                scores[e.target.dataset.score]++;
+                scoreZone.classList.add('hidden');
+                nextActionsZone.classList.remove('hidden');
+            });
+        });
+
+        continueBtn.addEventListener('click', () => {
+            trainingSection.classList.remove('md:items-start');
+            if (activePlayer === 'youtube') ytPlayerContainer.classList.add('pointer-events-none');
+            startNextInterval();
+        });
+
+        document.getElementById('endBtn').addEventListener('click', () => {
+            trainingSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+            document.getElementById('statTotal').textContent = scores.accurate + scores.average + scores.bad;
+            document.getElementById('statAccurate').textContent = scores.accurate;
+            document.getElementById('statAverage').textContent = scores.average;
+            document.getElementById('statBad').textContent = scores.bad;
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            resultsSection.classList.add('hidden');
+            setupSection.classList.remove('hidden');
+            if(activePlayer === 'local') matchVideo.currentTime = 0;
+            if(activePlayer === 'youtube' && ytPlayer) ytPlayer.seekTo(0);
+        });
+    </script>
+</body>
+</html>
