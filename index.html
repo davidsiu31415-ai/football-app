@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>足球瞬間記憶訓練 Pro (解鎖進度條)</title>
+    <title>足球瞬間記憶訓練 Pro (YouTube + 旋轉版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 戰術板專用樣式 */
@@ -14,21 +14,25 @@
             border: 2px solid white;
             overflow: hidden;
             touch-action: none;
-            transition: aspect-ratio 0.3s ease;
+            transition: aspect-ratio 0.3s ease; /* 旋轉時嘅動畫過渡 */
         }
         
+        /* 根據 data-orientation 決定長寬比 */
         .pitch[data-orientation="horizontal"] { aspect-ratio: 3 / 2; }
         .pitch[data-orientation="vertical"] { aspect-ratio: 2 / 3; }
 
+        /* 控制橫向與直向線條嘅顯示 */
         .pitch[data-orientation="horizontal"] .layout-v { display: none; }
         .pitch[data-orientation="horizontal"] .layout-h { display: block; }
         .pitch[data-orientation="vertical"] .layout-h { display: none; }
         .pitch[data-orientation="vertical"] .layout-v { display: block; }
 
+        /* 球場線條共用樣式 */
         .line-center { position: absolute; background: white; }
         .circle-center { position: absolute; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); }
         .penalty-box { position: absolute; border: 2px solid white; }
         
+        /* 標記與畫圖 */
         .marker {
             position: absolute;
             width: 20px; height: 20px; border-radius: 50%;
@@ -50,7 +54,9 @@
 
         <!-- 設定區 -->
         <div id="setupSection" class="flex flex-col gap-4 mb-6 p-4 bg-gray-800 rounded-lg">
+            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- YouTube 載入區 -->
                 <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
                     <label class="block text-sm font-medium text-red-400 mb-2 font-bold">▶️ 貼上 YouTube 連結</label>
                     <div class="flex gap-2">
@@ -59,6 +65,7 @@
                     </div>
                 </div>
 
+                <!-- 本地影片上傳區 -->
                 <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
                     <label class="block text-sm font-medium text-blue-400 mb-2 font-bold">📁 或 上傳本地影片</label>
                     <input type="file" id="videoUpload" accept="video/*" class="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
@@ -89,12 +96,10 @@
             
             <!-- 影片區塊 -->
             <div id="videoContainer" class="flex-1 h-fit flex flex-col items-center">
-                <!-- 加上 controls 允許拉動進度條 -->
-                <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline controls></video>
-                <!-- 移除咗 pointer-events-none 允許直接操控 YouTube -->
-                <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden"></div>
+                <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline></video>
+                <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden pointer-events-none"></div>
                 
-                <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中... (你可以隨時手動拉動進度條)</p>
+                <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中...</p>
                 
                 <div id="timeControls" class="flex gap-3 mt-3 w-full justify-center">
                     <button onclick="skipTime(-5)" class="px-4 py-2 bg-gray-700 text-white font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
@@ -104,6 +109,7 @@
 
             <!-- 戰術板區塊 -->
             <div id="tacticalContainer" class="hidden flex-1 h-fit flex-col">
+                <!-- 工具列 -->
                 <div class="flex flex-wrap gap-2 mb-3 p-2 bg-gray-800 rounded-lg justify-center items-center">
                     <button class="tool-btn active px-3 py-1 rounded-md text-sm font-bold bg-red-500 text-white border-2 border-white" data-tool="red">主隊</button>
                     <button class="tool-btn px-3 py-1 rounded-md text-sm font-bold bg-blue-500 text-white border-2 border-transparent" data-tool="blue">客隊</button>
@@ -115,12 +121,15 @@
                     <button id="rotateBtn" class="px-3 py-1 rounded-md text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-1 shadow">🔄 旋轉</button>
                 </div>
 
+                <!-- 球場 -->
                 <div id="pitch" class="pitch rounded-lg shadow-lg" data-orientation="horizontal">
+                    <!-- 橫向模式線條 -->
                     <div class="line-center layout-h" style="width: 2px; height: 100%; left: 50%; top: 0;"></div>
                     <div class="circle-center layout-h" style="width: 20%; aspect-ratio: 1; left: 50%; top: 50%;"></div>
                     <div class="penalty-box layout-h" style="width: 15%; height: 50%; left: 0; top: 25%; border-left: none;"></div>
                     <div class="penalty-box layout-h" style="width: 15%; height: 50%; right: 0; top: 25%; border-right: none;"></div>
                     
+                    <!-- 直向模式線條 -->
                     <div class="line-center layout-v" style="width: 100%; height: 2px; top: 50%; left: 0;"></div>
                     <div class="circle-center layout-v" style="width: 30%; aspect-ratio: 1; left: 50%; top: 50%;"></div>
                     <div class="penalty-box layout-v" style="width: 60%; height: 15%; top: 0; left: 20%; border-top: none;"></div>
@@ -135,6 +144,7 @@
 
                 <p class="text-xs text-gray-400 mt-2 text-center">點擊放球員，拖曳畫箭嘴。可隨時旋轉戰術板視角。</p>
 
+                <!-- 動作按鈕 -->
                 <div class="mt-4 flex flex-col gap-3">
                     <button id="compareBtn" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow">提交並比較</button>
                     <div id="scoreZone" class="hidden flex-col gap-2">
@@ -153,6 +163,7 @@
             </div>
         </div>
 
+        <!-- 訓練報告區 -->
         <div id="resultsSection" class="hidden bg-gray-800 p-6 rounded-lg text-center">
             <h2 class="text-2xl font-bold text-white mb-6">📊 訓練報告</h2>
             <div class="flex justify-around mb-6 text-xl">
@@ -165,8 +176,10 @@
         </div>
     </div>
 
+    <!-- 載入 YouTube API -->
     <script src="https://www.youtube.com/iframe_api"></script>
     <script>
+        // === 影片播放系統 ===
         let activePlayer = 'none';
         let ytPlayer = null;
         let ytReady = false;
@@ -239,6 +252,7 @@
             else if (activePlayer === 'youtube' && ytPlayer) ytPlayer.seekTo(ytPlayer.getCurrentTime() + seconds, true);
         };
 
+        // === 核心訓練與戰術板邏輯 ===
         const intervalSelect = document.getElementById('intervalSelect');
         const setupSection = document.getElementById('setupSection');
         const trainingSection = document.getElementById('trainingSection');
@@ -266,14 +280,17 @@
         let isDrawing = false;
         let currentSvgLine = null;
 
+        // 初始化球場方向 (手機預設直，電腦預設橫)
         let initialOrientation = window.innerWidth < 768 ? 'vertical' : 'horizontal';
         pitch.setAttribute('data-orientation', initialOrientation);
 
+        // 旋轉球場邏輯 (真實 90 度轉換所有座標)
         rotateBtn.addEventListener('click', () => {
             const currentMode = pitch.getAttribute('data-orientation');
             const newMode = currentMode === 'horizontal' ? 'vertical' : 'horizontal';
             pitch.setAttribute('data-orientation', newMode);
             
+            // 轉換圓點座標
             document.querySelectorAll('.marker').forEach(marker => {
                 let left = parseFloat(marker.style.left);
                 let top = parseFloat(marker.style.top);
@@ -284,6 +301,7 @@
                 }
             });
 
+            // 轉換箭嘴座標
             document.querySelectorAll('#drawingLayer line').forEach(line => {
                 let x1 = parseFloat(line.getAttribute('x1')), y1 = parseFloat(line.getAttribute('y1'));
                 let x2 = parseFloat(line.getAttribute('x2')), y2 = parseFloat(line.getAttribute('y2'));
@@ -305,6 +323,7 @@
             });
         });
 
+        // 畫板互動
         pitch.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('marker') || e.target.tagName.toLowerCase() === 'line') {
                 e.target.remove();
@@ -360,6 +379,7 @@
 
         undoBtn.addEventListener('click', () => { if (markerHistory.length > 0) markerHistory.pop().remove(); });
 
+        // 流程控制
         startBtn.addEventListener('click', () => {
             scores = { accurate: 0, average: 0, bad: 0 }; 
             startNextInterval();
@@ -402,6 +422,7 @@
             videoContainer.classList.remove('hidden');
             timeControls.classList.add('hidden');
             trainingSection.classList.add('md:items-start');
+            if (activePlayer === 'youtube') ytPlayerContainer.classList.remove('pointer-events-none');
             
             videoStatus.textContent = "👀 左邊係實際畫面，右邊係你嘅記憶！";
             compareBtn.classList.add('hidden');
@@ -418,6 +439,7 @@
 
         continueBtn.addEventListener('click', () => {
             trainingSection.classList.remove('md:items-start');
+            if (activePlayer === 'youtube') ytPlayerContainer.classList.add('pointer-events-none');
             startNextInterval();
         });
 
