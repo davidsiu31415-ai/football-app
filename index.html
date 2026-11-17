@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>足球瞬間記憶訓練 Pro (解鎖進度條 + 時間重置)</title>
+    <title>足球瞬間記憶訓練 Pro (YouTube + 旋轉版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 戰術板專用樣式 */
@@ -96,18 +96,14 @@
             
             <!-- 影片區塊 -->
             <div id="videoContainer" class="flex-1 h-fit flex flex-col items-center">
-                <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline controls></video>
-                <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden"></div>
+                <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline></video>
+                <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden pointer-events-none"></div>
                 
-                <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中... (你可以隨時手動拉動進度條)</p>
+                <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中...</p>
                 
-                <!-- 升級版時間控制列 -->
-                <div id="timeControls" class="flex flex-wrap gap-2 mt-3 w-full justify-center">
-                    <button onclick="skipTime(-10)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 10 秒</button>
-                    <button onclick="skipTime(-5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
-                    <button onclick="skipTime(5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">快進 5 秒 ⏩</button>
-                    <button onclick="skipTime(10)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">快進 10 秒 ⏩</button>
-                    <button onclick="pauseForTactical()" class="px-3 py-2 bg-red-600 text-white text-sm font-bold rounded hover:bg-red-700 shadow">⏸️ 即時測試</button>
+                <div id="timeControls" class="flex gap-3 mt-3 w-full justify-center">
+                    <button onclick="skipTime(-5)" class="px-4 py-2 bg-gray-700 text-white font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
+                    <button onclick="skipTime(10)" class="px-4 py-2 bg-gray-700 text-white font-bold rounded hover:bg-gray-600 shadow">快進 10 秒 ⏩</button>
                 </div>
             </div>
 
@@ -251,18 +247,15 @@
             if (activePlayer === 'youtube' && ytPlayer) ytPlayer.pauseVideo();
         }
 
+        // 修改點：快進退後時，同步加減目標時間 (targetTime)
         window.skipTime = function(seconds) {
-            if (activePlayer === 'local') matchVideo.currentTime += seconds;
-            else if (activePlayer === 'youtube' && ytPlayer) ytPlayer.seekTo(ytPlayer.getCurrentTime() + seconds, true);
-            
-            // 將計時的時間完全重置
-            const val = intervalSelect.value;
-            const intervalSeconds = (val === 'random') ? Math.floor(Math.random() * (15 - 5 + 1)) + 5 : parseInt(val);
-            
-            targetTime = getVideoTime() + intervalSeconds;
-            
-            // 更新狀態列文字顯示
-            videoStatus.textContent = `▶️ 專注觀看比賽 (約 ${val === 'random' ? '?' : intervalSeconds} 秒後暫停)`;
+            if (activePlayer === 'local') {
+                matchVideo.currentTime += seconds;
+            } else if (activePlayer === 'youtube' && ytPlayer) {
+                ytPlayer.seekTo(ytPlayer.getCurrentTime() + seconds, true);
+            }
+            // 同步調整測試目標時間，保持相對倒數不變
+            targetTime += seconds; 
         };
 
         // === 核心訓練與戰術板邏輯 ===
@@ -424,12 +417,12 @@
             }, 100);
         }
 
-        window.pauseForTactical = function() {
+        function pauseForTactical() {
             clearInterval(checkInterval);
             pauseActiveVideo();
             videoContainer.classList.add('hidden');
             tacticalContainer.classList.remove('hidden');
-        };
+        }
 
         compareBtn.addEventListener('click', () => {
             videoContainer.classList.remove('hidden');
