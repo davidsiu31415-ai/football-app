@@ -89,10 +89,10 @@
         <div id="trainingSection" class="hidden flex-col md:flex-row gap-6">
             
             <div id="videoContainer" class="flex-1 h-fit flex flex-col items-center">
-                <!-- 重新開始按鈕 (回到上載) -->
+                <!-- 重新開始按鈕 (回到上載畫面) -->
                 <div class="w-full flex justify-start mb-3">
                     <button id="backToSetupBtn" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow flex items-center gap-1">
-                        ⬅️ 重新開始 (回到上載)
+                        ⬅️ 重新開始 (回到上載畫面)
                     </button>
                 </div>
 
@@ -101,8 +101,11 @@
                 
                 <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中...</p>
                 
+                <!-- 影片時間控制及即時暫停測試 -->
                 <div id="timeControls" class="flex flex-wrap gap-2 mt-3 w-full justify-center">
                     <button onclick="skipTime(-5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
+                    <!-- 【新增】即時暫停並測試按鈕 -->
+                    <button id="manualPauseBtn" class="px-3 py-2 bg-yellow-600 text-white text-sm font-bold rounded hover:bg-yellow-700 shadow">⏸️ 暫停並測試</button>
                     <button onclick="skipTime(5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">快進 5 秒 ⏩</button>
                 </div>
             </div>
@@ -142,7 +145,7 @@
 
                 <div class="mt-4 flex flex-col gap-3">
                     
-                    <!-- 【新增】測試操作區：包含提交比較、及中途重新開始 -->
+                    <!-- 測試操作區 -->
                     <div id="testActionsZone" class="flex flex-col md:flex-row gap-2 w-full">
                         <button id="compareBtn" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow">提交並比較</button>
                         <button id="resumeFromPauseBtn" class="flex-1 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-700 shadow">重新開始 (繼續播放)</button>
@@ -282,6 +285,7 @@
         const testActionsZone = document.getElementById('testActionsZone');
         const compareBtn = document.getElementById('compareBtn');
         const resumeFromPauseBtn = document.getElementById('resumeFromPauseBtn');
+        const manualPauseBtn = document.getElementById('manualPauseBtn');
         
         const scoreZone = document.getElementById('scoreZone');
         const nextActionsZone = document.getElementById('nextActionsZone');
@@ -399,7 +403,7 @@
             videoContainer.classList.remove('hidden');
             timeControls.classList.remove('hidden');
             tacticalContainer.classList.add('hidden');
-            testActionsZone.classList.remove('hidden'); // 顯示提交及重新開始按鈕
+            testActionsZone.classList.remove('hidden');
             scoreZone.classList.add('hidden');
             nextActionsZone.classList.add('hidden');
             
@@ -426,6 +430,11 @@
             tacticalContainer.classList.remove('hidden');
         }
 
+        // 【新增】即時暫停並進入測試畫面
+        manualPauseBtn.addEventListener('click', () => {
+            pauseForTactical();
+        });
+
         compareBtn.addEventListener('click', () => {
             videoContainer.classList.remove('hidden');
             timeControls.classList.add('hidden');
@@ -433,27 +442,22 @@
             if (activePlayer === 'youtube') ytPlayerContainer.classList.remove('pointer-events-none');
             
             videoStatus.textContent = "👀 左邊係實際畫面，右邊係你嘅記憶！";
-            testActionsZone.classList.add('hidden'); // 隱藏提交及重新開始按鈕
+            testActionsZone.classList.add('hidden');
             scoreZone.classList.remove('hidden');
         });
 
-        // 【新增】中斷戰術板，回到影片暫停一刻並繼續播放
         resumeFromPauseBtn.addEventListener('click', () => {
-            // 清理戰術板上的畫作
             document.querySelectorAll('.marker').forEach(m => m.remove());
             document.querySelectorAll('#drawingLayer line').forEach(m => m.remove());
             markerHistory = [];
 
-            // 切換畫面
             tacticalContainer.classList.add('hidden');
             videoContainer.classList.remove('hidden');
             timeControls.classList.remove('hidden');
 
-            // 重新計時並繼續播放
             const val = intervalSelect.value;
             const seconds = (val === 'random') ? Math.floor(Math.random() * (15 - 5 + 1)) + 5 : parseInt(val);
             
-            // 由於沒有改動過影片時間，getVideoTime() 即為中斷嗰一刻
             targetTime = getVideoTime() + seconds;
             
             playActiveVideo();
