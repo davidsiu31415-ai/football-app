@@ -89,16 +89,21 @@
         <div id="trainingSection" class="hidden flex-col md:flex-row gap-6">
             
             <div id="videoContainer" class="flex-1 h-fit flex flex-col items-center">
+                <!-- 重新開始按鈕 (回到上載) -->
+                <div class="w-full flex justify-start mb-3">
+                    <button id="backToSetupBtn" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow flex items-center gap-1">
+                        ⬅️ 重新開始 (回到上載)
+                    </button>
+                </div>
+
                 <video id="matchVideo" class="w-full aspect-video object-contain bg-black rounded-lg shadow-lg hidden" playsinline></video>
                 <div id="youtubePlayer" class="w-full aspect-video rounded-lg shadow-lg hidden pointer-events-none"></div>
                 
                 <p id="videoStatus" class="text-center text-gray-400 mt-2 text-sm font-bold">影片播放中...</p>
                 
-                <!-- 【修改】新增倒退 10 秒，共三個按鈕 -->
                 <div id="timeControls" class="flex flex-wrap gap-2 mt-3 w-full justify-center">
-                    <button onclick="skipTime(-10)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 10 秒</button>
                     <button onclick="skipTime(-5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">⏪ 倒退 5 秒</button>
-                    <button onclick="skipTime(10)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">快進 10 秒 ⏩</button>
+                    <button onclick="skipTime(5)" class="px-3 py-2 bg-gray-700 text-white text-sm font-bold rounded hover:bg-gray-600 shadow">快進 5 秒 ⏩</button>
                 </div>
             </div>
 
@@ -136,7 +141,13 @@
                 <p class="text-xs text-gray-400 mt-2 text-center">點擊放球員，拖曳畫箭嘴。可隨時旋轉戰術板視角。</p>
 
                 <div class="mt-4 flex flex-col gap-3">
-                    <button id="compareBtn" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow">提交並比較</button>
+                    
+                    <!-- 【新增】測試操作區：包含提交比較、及中途重新開始 -->
+                    <div id="testActionsZone" class="flex flex-col md:flex-row gap-2 w-full">
+                        <button id="compareBtn" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow">提交並比較</button>
+                        <button id="resumeFromPauseBtn" class="flex-1 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-700 shadow">重新開始 (繼續播放)</button>
+                    </div>
+
                     <div id="scoreZone" class="hidden flex-col gap-2">
                         <p class="text-sm font-bold text-center text-gray-300">為今次記憶評分：</p>
                         <div class="flex gap-2">
@@ -236,7 +247,6 @@
             if (activePlayer === 'youtube' && ytPlayer) ytPlayer.pauseVideo();
         }
 
-        // 【修改】倒退重置計時，快進保持時間
         window.skipTime = function(seconds) {
             if (activePlayer === 'local') {
                 matchVideo.currentTime += seconds;
@@ -245,15 +255,11 @@
             }
             
             if (seconds < 0) {
-                // 如果是倒退，重置目標時間
                 const val = intervalSelect.value;
                 const intervalSeconds = (val === 'random') ? Math.floor(Math.random() * (15 - 5 + 1)) + 5 : parseInt(val);
                 targetTime = getVideoTime() + intervalSeconds;
-                
-                // 更新提示文字讓使用者知道重新計時了
                 videoStatus.textContent = `▶️ 專注觀看比賽 (重新計時：約 ${val === 'random' ? '?' : intervalSeconds} 秒後暫停)`;
             } else {
-                // 如果是快進，將目標時間推後，保持倒數不受影響
                 targetTime += seconds;
             }
         };
@@ -272,7 +278,11 @@
         const toolBtns = document.querySelectorAll('.tool-btn');
         const undoBtn = document.getElementById('undoBtn');
         const rotateBtn = document.getElementById('rotateBtn');
+        
+        const testActionsZone = document.getElementById('testActionsZone');
         const compareBtn = document.getElementById('compareBtn');
+        const resumeFromPauseBtn = document.getElementById('resumeFromPauseBtn');
+        
         const scoreZone = document.getElementById('scoreZone');
         const nextActionsZone = document.getElementById('nextActionsZone');
         const continueBtn = document.getElementById('continueBtn');
@@ -389,7 +399,7 @@
             videoContainer.classList.remove('hidden');
             timeControls.classList.remove('hidden');
             tacticalContainer.classList.add('hidden');
-            compareBtn.classList.remove('hidden');
+            testActionsZone.classList.remove('hidden'); // 顯示提交及重新開始按鈕
             scoreZone.classList.add('hidden');
             nextActionsZone.classList.add('hidden');
             
@@ -423,8 +433,35 @@
             if (activePlayer === 'youtube') ytPlayerContainer.classList.remove('pointer-events-none');
             
             videoStatus.textContent = "👀 左邊係實際畫面，右邊係你嘅記憶！";
-            compareBtn.classList.add('hidden');
+            testActionsZone.classList.add('hidden'); // 隱藏提交及重新開始按鈕
             scoreZone.classList.remove('hidden');
+        });
+
+        // 【新增】中斷戰術板，回到影片暫停一刻並繼續播放
+        resumeFromPauseBtn.addEventListener('click', () => {
+            // 清理戰術板上的畫作
+            document.querySelectorAll('.marker').forEach(m => m.remove());
+            document.querySelectorAll('#drawingLayer line').forEach(m => m.remove());
+            markerHistory = [];
+
+            // 切換畫面
+            tacticalContainer.classList.add('hidden');
+            videoContainer.classList.remove('hidden');
+            timeControls.classList.remove('hidden');
+
+            // 重新計時並繼續播放
+            const val = intervalSelect.value;
+            const seconds = (val === 'random') ? Math.floor(Math.random() * (15 - 5 + 1)) + 5 : parseInt(val);
+            
+            // 由於沒有改動過影片時間，getVideoTime() 即為中斷嗰一刻
+            targetTime = getVideoTime() + seconds;
+            
+            playActiveVideo();
+            videoStatus.textContent = `▶️ 專注觀看比賽 (重新計時：約 ${val === 'random' ? '?' : seconds} 秒後暫停)`;
+            
+            checkInterval = setInterval(() => {
+                if (getVideoTime() >= targetTime) pauseForTactical();
+            }, 100);
         });
 
         document.querySelectorAll('.score-btn').forEach(btn => {
@@ -439,6 +476,22 @@
             trainingSection.classList.remove('md:items-start');
             if (activePlayer === 'youtube') ytPlayerContainer.classList.add('pointer-events-none');
             startNextInterval();
+        });
+
+        document.getElementById('backToSetupBtn').addEventListener('click', () => {
+            clearInterval(checkInterval);
+            pauseActiveVideo();
+            
+            trainingSection.classList.add('hidden');
+            setupSection.classList.remove('hidden');
+            trainingSection.classList.remove('md:items-start');
+            videoContainer.classList.remove('hidden');
+            tacticalContainer.classList.add('hidden');
+            
+            if (activePlayer === 'youtube') ytPlayerContainer.classList.add('pointer-events-none');
+            
+            if(activePlayer === 'local') matchVideo.currentTime = 0;
+            if(activePlayer === 'youtube' && ytPlayer) ytPlayer.seekTo(0);
         });
 
         document.getElementById('endBtn').addEventListener('click', () => {
